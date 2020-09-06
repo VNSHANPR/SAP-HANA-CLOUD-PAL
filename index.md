@@ -1,37 +1,47 @@
-## Welcome to GitHub Pages
+## SAP HANA Predictive Appliance Library
 
-You can use the [editor on GitHub](https://github.com/VNSHANPR/SAP-HANA-CLOUD-PAL/edit/gh-pages/index.md) to maintain and preview the content for your website in Markdown files.
+In this excercise we will use S4 HANA Sales header Virtual tables in HANA Cloud and use it to load sales order history of a specific Material ,and 
+then use this data along with Weather Data from Azure Data lake to Predict the future Sales of the Material, and see co-relation if any with the Weather Data.
 
-Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
+### Query the S4HANA Sales header Virtual Tables VBAP,VBAK,MAKT in HANA CLOUD
 
-### Markdown
-
-Markdown is a lightweight and easy-to-use syntax for styling your writing. It includes conventions for
 
 ```markdown
-Syntax highlighted code block
 
-# Header 1
-## Header 2
-### Header 3
-
-- Bulleted
-- List
-
-1. Numbered
-2. List
-
-**Bold** and _Italic_ and `Code` text
-
-[Link](url) and ![Image](src)
+select  a.AUDAT as ID,sum(b.KWMENG) as "SALES_ORDER_QUANTITY" , DAYNAME(a.AUDAT) as DAY,CASE WHEN DAYNAME(a.AUDAT)='SUNDAY' THEN 1 WHEN DAYNAME(a.AUDAT)='SATURDAY' THEN 1 ELSE 0 END AS WEEKEND,MONTH(a.AUDAT) as MONTH,b.MATNR,c.MAKTG from 
+"DBADMIN"."VT_VBAK" a inner join "DBADMIN"."VT_VBAP" b ON a.VBELN=b.VBELN and a.MANDT=b.MANDT inner join  "DBADMIN"."VT_MAKT" c ON c.MATNR=b.MATNR 
+where b.MATNR='MR314201' and c.SPRAS='E' group by b.MATNR,a.AUDAT,c.MAKTG order by a.AUDAT DESC
 ```
 
-For more details see [GitHub Flavored Markdown](https://guides.github.com/features/mastering-markdown/).
 
-### Jekyll Themes
+### Load filtered S4HANA data (only about 600 rows) into a table
+Ignore below command if the table already exists!
+```markdown
+CREATE TABLE S4_MAT_TRAIN as (select  a.AUDAT as ID,sum(b.KWMENG) as "SALES_ORDER_QUANTITY" , DAYNAME(a.AUDAT) as DAY,CASE WHEN DAYNAME(a.AUDAT)='SUNDAY' THEN 1 WHEN DAYNAME(a.AUDAT)='SATURDAY' THEN 1 ELSE 0 END AS WEEKEND,MONTH(a.AUDAT) as MONTH,b.MATNR,c.MAKTG from 
+"DBADMIN"."VT_VBAK" a inner join "DBADMIN"."VT_VBAP" b ON a.VBELN=b.VBELN and a.MANDT=b.MANDT inner join  "DBADMIN"."VT_MAKT" c ON c.MATNR=b.MATNR 
+where b.MATNR='MR314201' and c.SPRAS='E' group by b.MATNR,a.AUDAT,c.MAKTG order by a.AUDAT DESC);
+```
 
-Your Pages site will use the layout and styles from the Jekyll theme you have selected in your [repository settings](https://github.com/VNSHANPR/SAP-HANA-CLOUD-PAL/settings). The name of this theme is saved in the Jekyll `_config.yml` configuration file.
+### Create PAL Regression Parameter Table
 
-### Support or Contact
 
-Having trouble with Pages? Check out our [documentation](https://docs.github.com/categories/github-pages-basics/) or [contact support](https://github.com/contact) and we’ll help you sort it out.
+```markdown
+
+CREATE LOCAL TEMPORARY COLUMN TABLE 
+	#PAL_PARAMETER_TBL 
+	("PARAM_NAME" VARCHAR(256), "INT_VALUE" INTEGER, "DOUBLE_VALUE" DOUBLE, "STRING_VALUE" VARCHAR(1000));
+INSERT INTO #PAL_PARAMETER_TBL VALUES ('THREAD_RATIO',NULL,0.5,NULL);
+INSERT INTO #PAL_PARAMETER_TBL VALUES ('PMML_EXPORT',2,NULL,NULL);
+INSERT INTO #PAL_PARAMETER_TBL VALUES ('CATEGORICAL_VARIABLE',NULL,NULL,'DAY');
+INSERT INTO #PAL_PARAMETER_TBL VALUES ('CATEGORICAL_VARIABLE',NULL,NULL,'WEEKEND');
+INSERT INTO #PAL_PARAMETER_TBL VALUES ('CATEGORICAL_VARIABLE',NULL,NULL,'MONTH');
+```
+
+### Run PAL Regression Algorithim 
+
+```markdown
+
+CALL _SYS_AFL.PAL_LINEAR_REGRESSION(S4_MAT_TRAIN,"#PAL_PARAMETER_TBL", ?, ?, ?, ?,?);
+
+```
+
