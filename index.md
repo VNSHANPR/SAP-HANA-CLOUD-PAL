@@ -1,3 +1,4 @@
+![Alt text](images/logo_hc_ta.png?raw=true "Title")
 ## SAP HANA Predictive Appliance Library
 
 In this excercise we will use S4 HANA Sales header Virtual tables in HANA Cloud and use it to load sales order history of a specific Material ,and 
